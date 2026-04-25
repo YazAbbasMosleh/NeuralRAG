@@ -1,0 +1,13 @@
+fastapi==0.119.0
+uvicorn==0.37.0
+python-multipart==0.0.20
+langchain==1.2.0
+langchain-community==0.4.1
+langchain-ollama==1.0.1
+langchain-experimental==0.4.1
+faiss-cpu==1.13.2
+llama-cpp-python==0.3.16
+pypdf==6.10.2
+pyyaml==6.0.2
+numpy==2.2.6
+
