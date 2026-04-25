@@ -1,0 +1,10 @@
+llm_model: "qwen2.5-coder:0.5b"
+embedding_model_path: "embedding_models/nomic-embed-text-v2.gguf"
+pdf_path: "./Grokking_Algorithms.pdf"
+vector_store_path: "vector_store/faiss_index"
+chunk_size: 1000
+chunk_overlap: 150
+temperature: 0.7
+max_tokens: 2048
+top_p: 0.9
+n_ctx: 2048
