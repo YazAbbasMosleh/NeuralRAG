@@ -1,0 +1,1048 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>RAG — Neural Document Mind</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet"/>
+
+<style>
+/* ─── RESET & TOKENS ─────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --black:     #040705;
+  --deep:      #080f09;
+  --surface:   #0c160d;
+  --panel:     #111d12;
+  --border:    #1a2e1b;
+  --border2:   #223524;
+  --g900:      #0d2410;
+  --g800:      #0f3012;
+  --g700:      #133d16;
+  --g600:      #1a5220;
+  --g500:      #22692a;
+  --g400:      #2d8a38;
+  --g300:      #3dab4a;
+  --g200:      #56c963;
+  --g100:      #7ae086;
+  --g50:       #adf0b6;
+  --glow:      #2d8a3880;
+  --glowbright:#3dab4a60;
+  --text:      #c8e6cb;
+  --text2:     #8ab48e;
+  --text3:     #506854;
+  --font-mono: 'Share Tech Mono', monospace;
+  --font-head: 'Syne', sans-serif;
+  --font-body: 'DM Sans', sans-serif;
+  --radius:    6px;
+  --trans:     all .25s cubic-bezier(.4,0,.2,1);
+}
+
+html { scroll-behavior: smooth; }
+
+body {
+  background: var(--black);
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 14px;
+  line-height: 1.6;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* ─── ANIMATED BACKGROUND ─────────────────────────────────────────── */
+.bg-grid {
+  position: fixed; inset: 0; z-index: 0; pointer-events: none;
+  background-image:
+    linear-gradient(rgba(34,105,42,.07) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(34,105,42,.07) 1px, transparent 1px);
+  background-size: 40px 40px;
+  animation: gridShift 20s linear infinite;
+}
+@keyframes gridShift { to { background-position: 40px 40px; } }
+
+.bg-radial {
+  position: fixed; inset: 0; z-index: 0; pointer-events: none;
+  background: radial-gradient(ellipse 70% 50% at 50% 0%, rgba(29,82,32,.35) 0%, transparent 70%);
+}
+
+.scan-line {
+  position: fixed; top: 0; left: 0; right: 0; height: 2px;
+  background: linear-gradient(90deg, transparent, var(--g400), transparent);
+  z-index: 1; opacity: .5;
+  animation: scanDown 6s ease-in-out infinite;
+}
+@keyframes scanDown {
+  0%   { top: 0%; opacity: .6; }
+  80%  { top: 100%; opacity: .2; }
+  100% { top: 100%; opacity: 0; }
+}
+
+/* ─── LAYOUT ─────────────────────────────────────────────────────── */
+#app {
+  position: relative; z-index: 2;
+  display: grid;
+  grid-template-rows: auto 1fr;
+  min-height: 100vh;
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 0 20px 40px;
+}
+
+/* ─── HEADER ─────────────────────────────────────────────────────── */
+header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 28px 0 24px;
+  border-bottom: 1px solid var(--border);
+}
+
+.logo {
+  display: flex; align-items: baseline; gap: 12px;
+}
+.logo-mark {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--g300);
+  letter-spacing: .2em;
+  text-transform: uppercase;
+  opacity: .7;
+}
+.logo-title {
+  font-family: var(--font-head);
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: -.02em;
+  color: var(--text);
+}
+.logo-title span {
+  color: var(--g300);
+  text-shadow: 0 0 20px var(--glow);
+}
+
+#status-badge {
+  display: flex; align-items: center; gap: 8px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--text3);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 6px 14px;
+  transition: var(--trans);
+}
+#status-badge .dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--text3);
+  transition: var(--trans);
+}
+#status-badge.ready { color: var(--g200); border-color: var(--g700); }
+#status-badge.ready .dot {
+  background: var(--g300);
+  box-shadow: 0 0 8px var(--g400);
+  animation: pulse 2s ease-in-out infinite;
+}
+#status-badge.loading { color: #e8c55a; border-color: #3a3010; }
+#status-badge.loading .dot { background: #e8c55a; animation: pulse 1s ease-in-out infinite; }
+#status-badge.error { color: #e85a5a; border-color: #3a1010; }
+#status-badge.error .dot { background: #e85a5a; }
+@keyframes pulse {
+  0%,100% { opacity: 1; transform: scale(1); }
+  50%      { opacity: .5; transform: scale(1.3); }
+}
+
+/* ─── MAIN GRID ──────────────────────────────────────────────────── */
+main {
+  display: grid;
+  grid-template-columns: 340px 1fr;
+  gap: 20px;
+  padding-top: 20px;
+  align-items: start;
+}
+
+/* ─── PANEL CARD ─────────────────────────────────────────────────── */
+.card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  transition: var(--trans);
+}
+.card:hover { border-color: var(--border2); }
+
+.card-header {
+  display: flex; align-items: center; gap: 10px;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+.card-header .icon {
+  width: 28px; height: 28px;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--g900);
+  border: 1px solid var(--g800);
+  border-radius: 4px;
+  color: var(--g300);
+  font-size: 14px;
+}
+.card-title {
+  font-family: var(--font-head);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--text2);
+}
+.card-body { padding: 18px; }
+
+/* ─── FORM ELEMENTS ──────────────────────────────────────────────── */
+.field { margin-bottom: 14px; }
+.field:last-child { margin-bottom: 0; }
+
+label {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: .15em;
+  text-transform: uppercase;
+  color: var(--text3);
+  margin-bottom: 5px;
+}
+
+input[type="text"],
+input[type="number"],
+select {
+  width: 100%;
+  background: var(--deep);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  padding: 8px 12px;
+  outline: none;
+  transition: var(--trans);
+  appearance: none;
+}
+input[type="text"]:focus,
+input[type="number"]:focus,
+select:focus {
+  border-color: var(--g600);
+  box-shadow: 0 0 0 3px rgba(34,105,42,.15);
+}
+
+input[type="range"] {
+  width: 100%;
+  accent-color: var(--g400);
+  cursor: pointer;
+}
+
+.range-row {
+  display: flex; align-items: center; gap: 10px;
+}
+.range-val {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--g200);
+  min-width: 36px;
+  text-align: right;
+}
+
+/* ─── FILE DROP ZONE ─────────────────────────────────────────────── */
+.drop-zone {
+  border: 2px dashed var(--border2);
+  border-radius: var(--radius);
+  padding: 28px 18px;
+  text-align: center;
+  cursor: pointer;
+  transition: var(--trans);
+  position: relative;
+  overflow: hidden;
+}
+.drop-zone:hover,
+.drop-zone.drag-over {
+  border-color: var(--g500);
+  background: rgba(34,105,42,.06);
+}
+.drop-zone.has-file { border-style: solid; border-color: var(--g600); background: rgba(34,105,42,.08); }
+.drop-zone input[type="file"] {
+  position: absolute; inset: 0; opacity: 0; cursor: pointer;
+}
+.drop-icon { font-size: 28px; margin-bottom: 8px; }
+.drop-text { font-family: var(--font-mono); font-size: 11px; color: var(--text3); }
+.drop-filename { font-family: var(--font-mono); font-size: 11px; color: var(--g200); margin-top: 6px; }
+
+/* ─── BUTTONS ─────────────────────────────────────────────────────── */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 10px 18px;
+  border-radius: var(--radius);
+  border: 1px solid transparent;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: var(--trans);
+  outline: none;
+  width: 100%;
+}
+.btn-primary {
+  background: linear-gradient(135deg, var(--g700), var(--g600));
+  border-color: var(--g500);
+  color: var(--g50);
+  box-shadow: 0 0 20px rgba(34,105,42,.2);
+}
+.btn-primary:hover:not(:disabled) {
+  background: linear-gradient(135deg, var(--g600), var(--g500));
+  border-color: var(--g400);
+  box-shadow: 0 0 30px rgba(34,105,42,.4);
+  transform: translateY(-1px);
+}
+.btn-primary:disabled {
+  opacity: .4; cursor: not-allowed; transform: none;
+}
+.btn-ghost {
+  background: transparent;
+  border-color: var(--border2);
+  color: var(--text3);
+}
+.btn-ghost:hover { border-color: var(--g700); color: var(--text2); }
+.btn-danger {
+  background: transparent;
+  border-color: #3a1010;
+  color: #e85a5a;
+  margin-top: 8px;
+}
+.btn-danger:hover { background: rgba(232,90,90,.08); border-color: #6b2020; }
+
+/* ─── SPINNER ─────────────────────────────────────────────────────── */
+.spinner {
+  width: 14px; height: 14px;
+  border: 2px solid rgba(173,240,182,.3);
+  border-top-color: var(--g200);
+  border-radius: 50%;
+  animation: spin .8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ─── COLLAPSIBLE SECTIONS ────────────────────────────────────────── */
+.collapsible-trigger {
+  display: flex; align-items: center; justify-content: space-between;
+  cursor: pointer; user-select: none;
+  padding: 10px 18px;
+  border-top: 1px solid var(--border);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: .15em;
+  text-transform: uppercase;
+  color: var(--text3);
+  transition: var(--trans);
+}
+.collapsible-trigger:hover { color: var(--text2); background: rgba(34,105,42,.04); }
+.collapsible-trigger .arrow { transition: transform .2s; }
+.collapsible-trigger.open .arrow { transform: rotate(90deg); }
+.collapsible-body { display: none; }
+.collapsible-body.open { display: block; }
+.collapsible-inner { padding: 14px 18px; border-top: 1px solid var(--border); }
+
+/* ─── CHAT AREA ───────────────────────────────────────────────────── */
+.chat-wrapper {
+  display: flex; flex-direction: column;
+  height: calc(100vh - 160px);
+  min-height: 500px;
+}
+
+.chat-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border2) transparent;
+}
+
+.chat-messages::-webkit-scrollbar { width: 4px; }
+.chat-messages::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+
+/* Empty state */
+.empty-state {
+  margin: auto;
+  text-align: center;
+  opacity: .5;
+}
+.empty-state .es-icon {
+  font-size: 48px;
+  margin-bottom: 16px;
+  display: block;
+}
+.empty-state p {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: .12em;
+  color: var(--text3);
+  text-transform: uppercase;
+}
+
+/* Message bubbles */
+.msg {
+  display: flex; gap: 12px;
+  animation: msgIn .3s ease-out both;
+}
+@keyframes msgIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.msg.user { flex-direction: row-reverse; }
+
+.msg-avatar {
+  width: 32px; height: 32px; flex-shrink: 0;
+  border-radius: 4px;
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: bold;
+}
+.msg.user .msg-avatar {
+  background: var(--g900);
+  border: 1px solid var(--g700);
+  color: var(--g200);
+}
+.msg.assistant .msg-avatar {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text3);
+}
+
+.msg-content {
+  max-width: 78%;
+  display: flex; flex-direction: column; gap: 4px;
+}
+.msg.user .msg-content { align-items: flex-end; }
+
+.msg-label {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: .15em;
+  text-transform: uppercase;
+  color: var(--text3);
+}
+
+.msg-bubble {
+  padding: 12px 16px;
+  border-radius: 8px;
+  font-size: 14px;
+  line-height: 1.65;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.msg.user .msg-bubble {
+  background: var(--g900);
+  border: 1px solid var(--g800);
+  color: var(--g50);
+  border-bottom-right-radius: 2px;
+}
+.msg.assistant .msg-bubble {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-bottom-left-radius: 2px;
+}
+
+/* Typing indicator */
+.typing-indicator {
+  display: flex; gap: 4px; align-items: center; padding: 4px 0;
+}
+.typing-indicator span {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--g400);
+  animation: typingBounce 1.2s ease-in-out infinite;
+}
+.typing-indicator span:nth-child(2) { animation-delay: .2s; }
+.typing-indicator span:nth-child(3) { animation-delay: .4s; }
+@keyframes typingBounce {
+  0%,60%,100% { transform: translateY(0); opacity: .5; }
+  30%          { transform: translateY(-6px); opacity: 1; }
+}
+
+/* ─── CHAT INPUT ──────────────────────────────────────────────────── */
+.chat-input-area {
+  padding: 16px 20px;
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.inference-controls {
+  display: flex; gap: 10px; margin-bottom: 10px; align-items: center;
+}
+.inference-controls label { margin-bottom: 0; white-space: nowrap; }
+.k-input { width: 70px !important; }
+
+.input-row {
+  display: flex; gap: 10px;
+}
+
+textarea#query {
+  flex: 1;
+  background: var(--deep);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 14px;
+  padding: 10px 14px;
+  resize: none;
+  outline: none;
+  transition: var(--trans);
+  min-height: 44px;
+  max-height: 160px;
+  line-height: 1.5;
+}
+textarea#query:focus { border-color: var(--g600); box-shadow: 0 0 0 3px rgba(34,105,42,.12); }
+textarea#query::placeholder { color: var(--text3); }
+
+.send-btn {
+  width: 44px; height: 44px;
+  flex-shrink: 0;
+  background: linear-gradient(135deg, var(--g700), var(--g600));
+  border: 1px solid var(--g500);
+  border-radius: var(--radius);
+  color: var(--g50);
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 18px;
+  transition: var(--trans);
+  box-shadow: 0 0 20px rgba(34,105,42,.2);
+}
+.send-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, var(--g600), var(--g500));
+  box-shadow: 0 0 30px rgba(34,105,42,.5);
+  transform: translateY(-1px);
+}
+.send-btn:disabled { opacity: .3; cursor: not-allowed; transform: none; }
+
+/* ─── TOAST NOTIFICATIONS ─────────────────────────────────────────── */
+#toast-container {
+  position: fixed; bottom: 24px; right: 24px;
+  z-index: 999; display: flex; flex-direction: column; gap: 8px;
+}
+.toast {
+  background: var(--panel);
+  border: 1px solid var(--border2);
+  border-radius: var(--radius);
+  padding: 12px 16px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: .05em;
+  color: var(--text2);
+  max-width: 320px;
+  animation: toastIn .3s ease-out;
+  box-shadow: 0 8px 30px rgba(0,0,0,.5);
+}
+.toast.success { border-color: var(--g700); color: var(--g200); }
+.toast.error   { border-color: #3a1010; color: #e85a5a; }
+@keyframes toastIn {
+  from { opacity: 0; transform: translateY(10px) translateX(10px); }
+  to   { opacity: 1; transform: translateY(0) translateX(0); }
+}
+
+/* ─── DIVIDER ─────────────────────────────────────────────────────── */
+.divider {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 14px 0;
+}
+
+/* ─── SYSTEM INFO ─────────────────────────────────────────────────── */
+.info-row {
+  display: flex; justify-content: space-between; align-items: baseline;
+  margin-bottom: 6px;
+}
+.info-key {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--text3);
+}
+.info-val {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--g200);
+  text-align: right;
+  max-width: 60%;
+  word-break: break-all;
+}
+.info-val.dim { color: var(--text3); }
+</style>
+</head>
+<body>
+
+<div class="bg-grid"></div>
+<div class="bg-radial"></div>
+<div class="scan-line"></div>
+
+<div id="app">
+
+  <!-- ═══ HEADER ════════════════════════════════════════ -->
+  <header>
+    <div class="logo">
+      <span class="logo-mark">// v1.0</span>
+      <span class="logo-title">Neural<span>RAG</span></span>
+    </div>
+
+    <div id="status-badge">
+      <div class="dot"></div>
+      <span id="status-text">IDLE</span>
+    </div>
+  </header>
+
+  <!-- ═══ MAIN ══════════════════════════════════════════ -->
+  <main>
+
+    <!-- ─── LEFT PANEL ─────────────────────────────────── -->
+    <aside>
+
+      <!-- Upload & Config card -->
+      <div class="card">
+        <div class="card-header">
+          <div class="icon">⬆</div>
+          <span class="card-title">Load System</span>
+        </div>
+        <div class="card-body">
+
+          <!-- PDF Drop Zone -->
+          <div class="field">
+            <label>PDF Document</label>
+            <div class="drop-zone" id="drop-zone">
+              <input type="file" id="pdf-input" accept=".pdf" />
+              <div class="drop-icon">📄</div>
+              <div class="drop-text">Drop PDF here or click to browse</div>
+              <div class="drop-filename" id="drop-filename"></div>
+            </div>
+          </div>
+
+          <!-- LLM Model -->
+          <div class="field">
+            <label>Ollama LLM Model</label>
+            <input type="text" id="llm-model" value="qwen2.5-coder:0.5b" placeholder="e.g. llama3:8b"/>
+          </div>
+
+          <!-- Embedding Model -->
+          <div class="field">
+            <label>Embedding Model Path (.gguf)</label>
+            <input type="text" id="embed-path" value="embedding_models/nomic-embed-text-v2.gguf"/>
+          </div>
+
+        </div><!-- /card-body -->
+
+        <!-- Advanced settings collapsible -->
+        <div class="collapsible-trigger" id="adv-trigger">
+          <span>Advanced Settings</span>
+          <span class="arrow">▶</span>
+        </div>
+        <div class="collapsible-body" id="adv-body">
+          <div class="collapsible-inner">
+
+            <!-- Chunking Method -->
+            <div class="field">
+              <label>Chunking Method</label>
+              <select id="chunking-method">
+                <option value="recursive_character">Recursive Character</option>
+                <option value="character">Character</option>
+              </select>
+            </div>
+
+            <!-- Chunk Size -->
+            <div class="field">
+              <label>Chunk Size</label>
+              <div class="range-row">
+                <input type="range" id="chunk-size" min="200" max="4000" step="100" value="1000"
+                       oninput="document.getElementById('chunk-size-val').textContent=this.value"/>
+                <span class="range-val" id="chunk-size-val">1000</span>
+              </div>
+            </div>
+
+            <!-- Chunk Overlap -->
+            <div class="field">
+              <label>Chunk Overlap</label>
+              <div class="range-row">
+                <input type="range" id="chunk-overlap" min="0" max="800" step="50" value="200"
+                       oninput="document.getElementById('chunk-overlap-val').textContent=this.value"/>
+                <span class="range-val" id="chunk-overlap-val">200</span>
+              </div>
+            </div>
+
+            <!-- Temperature -->
+            <div class="field">
+              <label>Temperature</label>
+              <div class="range-row">
+                <input type="range" id="temperature" min="0" max="1" step="0.05" value="0.7"
+                       oninput="document.getElementById('temperature-val').textContent=parseFloat(this.value).toFixed(2)"/>
+                <span class="range-val" id="temperature-val">0.70</span>
+              </div>
+            </div>
+
+            <!-- Top P -->
+            <div class="field">
+              <label>Top-P</label>
+              <div class="range-row">
+                <input type="range" id="top-p" min="0" max="1" step="0.05" value="0.9"
+                       oninput="document.getElementById('top-p-val').textContent=parseFloat(this.value).toFixed(2)"/>
+                <span class="range-val" id="top-p-val">0.90</span>
+              </div>
+            </div>
+
+            <!-- N_CTX -->
+            <div class="field">
+              <label>Context Window (n_ctx)</label>
+              <input type="number" id="n-ctx" value="2048" min="256" max="16384"/>
+            </div>
+
+            <!-- Max Tokens -->
+            <div class="field">
+              <label>Max Output Tokens</label>
+              <input type="number" id="max-tokens" value="2048" min="64" max="8192"/>
+            </div>
+
+            <!-- Vector Store Path -->
+            <div class="field">
+              <label>Vector Store Path</label>
+              <input type="text" id="vs-path" value="vector_store"/>
+            </div>
+
+          </div>
+        </div><!-- /collapsible-body -->
+
+        <div class="card-body" style="padding-top:14px;">
+          <button class="btn btn-primary" id="load-btn" onclick="loadSystem()">
+            <span id="load-btn-inner">⚡ INITIALISE SYSTEM</span>
+          </button>
+          <button class="btn btn-danger" onclick="resetSystem()">✕ Reset</button>
+        </div>
+
+      </div><!-- /card -->
+
+      <!-- System info card -->
+      <div class="card" style="margin-top:14px;" id="info-card">
+        <div class="card-header">
+          <div class="icon">ℹ</div>
+          <span class="card-title">System Info</span>
+        </div>
+        <div class="card-body">
+          <div class="info-row">
+            <span class="info-key">Status</span>
+            <span class="info-val dim" id="info-status">Idle</span>
+          </div>
+          <div class="info-row">
+            <span class="info-key">PDF</span>
+            <span class="info-val dim" id="info-pdf">—</span>
+          </div>
+          <div class="info-row">
+            <span class="info-key">LLM</span>
+            <span class="info-val dim" id="info-llm">—</span>
+          </div>
+          <div class="info-row">
+            <span class="info-key">Embedder</span>
+            <span class="info-val dim" id="info-embed">—</span>
+          </div>
+        </div>
+      </div>
+
+    </aside>
+
+    <!-- ─── CHAT PANEL ──────────────────────────────────── -->
+    <section class="card chat-wrapper">
+
+      <!-- Messages -->
+      <div class="chat-messages" id="chat-messages">
+        <div class="empty-state" id="empty-state">
+          <span class="es-icon">🧠</span>
+          <p>Load a PDF to begin querying</p>
+        </div>
+      </div>
+
+      <!-- Input area -->
+      <div class="chat-input-area">
+        <div class="inference-controls">
+          <label for="k-val">Top-K Chunks</label>
+          <input type="number" id="k-val" class="k-input" value="4" min="1" max="20"/>
+        </div>
+        <div class="input-row">
+          <textarea id="query" placeholder="Ask a question about your document…" rows="1"
+                    onkeydown="handleKey(event)"></textarea>
+          <button class="send-btn" id="send-btn" onclick="sendQuery()" disabled title="Send">
+            ➤
+          </button>
+        </div>
+      </div>
+
+    </section>
+
+  </main>
+</div><!-- /#app -->
+
+<!-- Toast container -->
+<div id="toast-container"></div>
+
+<script>
+// ─── STATE ────────────────────────────────────────────────────────
+const API = '';  // same origin; change to 'http://localhost:8000' if serving separately
+let isReady = false;
+let isLoading = false;
+
+// ─── STARTUP ──────────────────────────────────────────────────────
+window.addEventListener('DOMContentLoaded', () => {
+  fetchStatus();
+  setInterval(fetchStatus, 8000);
+  autoResizeTextarea();
+  setupDropZone();
+  setupCollapsible();
+});
+
+// ─── STATUS POLLING ───────────────────────────────────────────────
+async function fetchStatus() {
+  try {
+    const res = await fetch(`${API}/status`);
+    const data = await res.json();
+    applyStatus(data);
+  } catch(e) { /* server may not be up yet */ }
+}
+
+function applyStatus(data) {
+  const badge  = document.getElementById('status-badge');
+  const stext  = document.getElementById('status-text');
+
+  badge.className = '';
+  badge.classList.add(data.status);
+  stext.textContent = data.status.toUpperCase();
+
+  isReady = data.status === 'ready';
+  document.getElementById('send-btn').disabled = !isReady;
+
+  document.getElementById('info-status').textContent = data.status;
+  document.getElementById('info-status').className   = 'info-val' + (isReady ? '' : ' dim');
+  document.getElementById('info-pdf').textContent    = data.loaded_pdf || '—';
+  document.getElementById('info-pdf').className      = 'info-val' + (data.loaded_pdf ? '' : ' dim');
+  document.getElementById('info-llm').textContent    = data.llm_model  || '—';
+  document.getElementById('info-llm').className      = 'info-val' + (data.llm_model ? '' : ' dim');
+  document.getElementById('info-embed').textContent  = data.embedding_model
+    ? data.embedding_model.split('/').pop()
+    : '—';
+  document.getElementById('info-embed').className    = 'info-val' + (data.embedding_model ? '' : ' dim');
+}
+
+// ─── DROP ZONE ────────────────────────────────────────────────────
+function setupDropZone() {
+  const zone  = document.getElementById('drop-zone');
+  const input = document.getElementById('pdf-input');
+  const label = document.getElementById('drop-filename');
+
+  input.addEventListener('change', () => {
+    if (input.files[0]) {
+      label.textContent = input.files[0].name;
+      zone.classList.add('has-file');
+    }
+  });
+
+  zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('drag-over'); });
+  zone.addEventListener('dragleave', () => zone.classList.remove('drag-over'));
+  zone.addEventListener('drop', e => {
+    e.preventDefault();
+    zone.classList.remove('drag-over');
+    const file = e.dataTransfer.files[0];
+    if (file && file.name.endsWith('.pdf')) {
+      const dt = new DataTransfer();
+      dt.items.add(file);
+      input.files = dt.files;
+      label.textContent = file.name;
+      zone.classList.add('has-file');
+    } else {
+      toast('Only PDF files are accepted.', 'error');
+    }
+  });
+}
+
+// ─── COLLAPSIBLE ──────────────────────────────────────────────────
+function setupCollapsible() {
+  const trigger = document.getElementById('adv-trigger');
+  const body    = document.getElementById('adv-body');
+  trigger.addEventListener('click', () => {
+    trigger.classList.toggle('open');
+    body.classList.toggle('open');
+  });
+}
+
+// ─── LOAD SYSTEM ──────────────────────────────────────────────────
+async function loadSystem() {
+  const pdfInput = document.getElementById('pdf-input');
+  if (!pdfInput.files[0]) { toast('Please select a PDF first.', 'error'); return; }
+  if (isLoading) return;
+
+  isLoading = true;
+  const btn   = document.getElementById('load-btn');
+  const inner = document.getElementById('load-btn-inner');
+  btn.disabled = true;
+  inner.innerHTML = '<div class="spinner"></div> LOADING…';
+
+  const fd = new FormData();
+  fd.append('pdf_file',             pdfInput.files[0]);
+  fd.append('llm_model',            document.getElementById('llm-model').value.trim());
+  fd.append('embedding_model_path', document.getElementById('embed-path').value.trim());
+  fd.append('chunk_size',           document.getElementById('chunk-size').value);
+  fd.append('chunk_overlap',        document.getElementById('chunk-overlap').value);
+  fd.append('chunking_method',      document.getElementById('chunking-method').value);
+  fd.append('temperature',          document.getElementById('temperature').value);
+  fd.append('top_p',                document.getElementById('top-p').value);
+  fd.append('n_ctx',                document.getElementById('n-ctx').value);
+  fd.append('max_tokens',           document.getElementById('max-tokens').value);
+  fd.append('vector_store_path',    document.getElementById('vs-path').value.trim());
+
+  try {
+    const res  = await fetch(`${API}/load`, { method: 'POST', body: fd });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Load failed');
+
+    toast(`✓ Loaded "${data.pdf}" — ${data.chunks} chunks`, 'success');
+    applyStatus({ status: 'ready', loaded_pdf: data.pdf,
+                  llm_model: data.llm_model, embedding_model: data.embedding_model });
+    document.getElementById('empty-state')?.remove();
+
+  } catch(e) {
+    toast(e.message, 'error');
+    applyStatus({ status: 'error', loaded_pdf: null, llm_model: null, embedding_model: null, error: e.message });
+  } finally {
+    isLoading = false;
+    btn.disabled = false;
+    inner.innerHTML = '⚡ INITIALISE SYSTEM';
+  }
+}
+
+// ─── SEND QUERY ───────────────────────────────────────────────────
+async function sendQuery() {
+  const textarea = document.getElementById('query');
+  const query = textarea.value.trim();
+  if (!query || !isReady) return;
+
+  textarea.value = '';
+  textarea.style.height = '44px';
+
+  appendMessage('user', query);
+
+  const typingId = appendTyping();
+  document.getElementById('send-btn').disabled = true;
+
+  try {
+    const k = parseInt(document.getElementById('k-val').value, 10) || 4;
+    const res = await fetch(`${API}/infer`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query, k }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Inference failed');
+    removeTyping(typingId);
+    appendMessage('assistant', data.answer);
+  } catch(e) {
+    removeTyping(typingId);
+    appendMessage('assistant', `⚠ Error: ${e.message}`);
+  } finally {
+    document.getElementById('send-btn').disabled = !isReady;
+  }
+}
+
+function handleKey(e) {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendQuery(); }
+}
+
+// ─── RESET ────────────────────────────────────────────────────────
+async function resetSystem() {
+  await fetch(`${API}/reset`, { method: 'DELETE' });
+  applyStatus({ status: 'idle', loaded_pdf: null, llm_model: null, embedding_model: null });
+  const msgs = document.getElementById('chat-messages');
+  msgs.innerHTML = `
+    <div class="empty-state" id="empty-state">
+      <span class="es-icon">🧠</span>
+      <p>Load a PDF to begin querying</p>
+    </div>`;
+  toast('System reset.', 'success');
+}
+
+// ─── MESSAGE HELPERS ──────────────────────────────────────────────
+function appendMessage(role, text) {
+  document.getElementById('empty-state')?.remove();
+  const container = document.getElementById('chat-messages');
+  const div = document.createElement('div');
+  div.className = `msg ${role}`;
+  div.innerHTML = `
+    <div class="msg-avatar">${role === 'user' ? 'YOU' : 'AI'}</div>
+    <div class="msg-content">
+      <div class="msg-label">${role === 'user' ? 'You' : 'Assistant'}</div>
+      <div class="msg-bubble">${escapeHtml(text)}</div>
+    </div>`;
+  container.appendChild(div);
+  container.scrollTop = container.scrollHeight;
+}
+
+function appendTyping() {
+  const container = document.getElementById('chat-messages');
+  const id = 'typing-' + Date.now();
+  const div = document.createElement('div');
+  div.className = 'msg assistant';
+  div.id = id;
+  div.innerHTML = `
+    <div class="msg-avatar">AI</div>
+    <div class="msg-content">
+      <div class="msg-label">Assistant</div>
+      <div class="msg-bubble">
+        <div class="typing-indicator">
+          <span></span><span></span><span></span>
+        </div>
+      </div>
+    </div>`;
+  container.appendChild(div);
+  container.scrollTop = container.scrollHeight;
+  return id;
+}
+
+function removeTyping(id) {
+  document.getElementById(id)?.remove();
+}
+
+// ─── TOAST ────────────────────────────────────────────────────────
+function toast(msg, type = '') {
+  const c = document.getElementById('toast-container');
+  const el = document.createElement('div');
+  el.className = `toast ${type}`;
+  el.textContent = msg;
+  c.appendChild(el);
+  setTimeout(() => el.remove(), 4000);
+}
+
+// ─── TEXTAREA AUTO-RESIZE ─────────────────────────────────────────
+function autoResizeTextarea() {
+  const ta = document.getElementById('query');
+  ta.addEventListener('input', () => {
+    ta.style.height = '44px';
+    ta.style.height = Math.min(ta.scrollHeight, 160) + 'px';
+  });
+}
+
+// ─── UTILS ────────────────────────────────────────────────────────
+function escapeHtml(str) {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+</script>
+</body>
+</html>
