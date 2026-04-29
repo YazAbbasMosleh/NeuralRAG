@@ -239,11 +239,10 @@ MIT License — free to use, modify, and distribute.
 ---
 
 
-# Centered Image Example
+# UI 
 
 <p align="center">
   <img src="NeuralRAG.png" alt="Centered image" width="100%">
 </p>
 
-This image is now perfectly centered on the page and responsive.[web:1][web:12]
 <p align="center">Built with ❤️ using LangChain · FAISS · llama-cpp-python · Ollama · FastAPI</p>
