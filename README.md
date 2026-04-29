@@ -245,4 +245,3 @@ MIT License — free to use, modify, and distribute.
   <img src="NeuralRAG.png" alt="Centered image" width="100%">
 </p>
 
-<p align="center">Built with ❤️ using LangChain · FAISS · llama-cpp-python · Ollama · FastAPI</p>
